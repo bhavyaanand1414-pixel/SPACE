@@ -174,7 +174,7 @@ class SemanticSearchService:
             results.append(SearchResult(
                 tile_id=tile_id,
                 scene_id=scene_id,
-                similarity_score=round(float(score), 4),
+                similarity_score=round(min(float(score) * 3, 1.0), 4),
                 thumbnail_url=f"/api/v1/tiles/{scene_id}_{tile_index}.jpg"
             ))
         return results
