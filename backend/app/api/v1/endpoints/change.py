@@ -52,6 +52,7 @@ async def analyze_change(request: ChangeAnalysisRequest):
                     before_date=e.before_date,
                     after_date=e.after_date,
                     location=e.location,
+                    evidence=e.evidence,
                 )
                 for e in result.change_events
             ],

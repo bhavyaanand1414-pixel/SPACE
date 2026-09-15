@@ -100,6 +100,7 @@ class ChangeEventSchema(BaseModel):
     before_date: Optional[str] = None
     after_date: Optional[str] = None
     location: Dict[str, Any] = Field(default_factory=dict)
+    evidence: Dict[str, Any] = Field(default_factory=dict, description="Cosine similarity, change magnitude, quality mask info")
 
 
 class ChangeAnalysisResponse(BaseModel):
