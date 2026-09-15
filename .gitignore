@@ -1,0 +1,71 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments & Packaging
+.env
+.env.local
+.venv
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+frontend/dist/
+frontend/.vite/
+
+# Large Datasets, Satellite Rasters & Storage (Synced via Cloudflare R2 / S3)
+/data/raw/*
+!/data/raw/.gitkeep
+/data/processed/*
+!/data/processed/.gitkeep
+/data/storage/*
+!/data/storage/.gitkeep
+backend/data/storage/*
+!backend/data/storage/.gitkeep
+backend/data/storage/reports/*
+!backend/data/storage/reports/.gitkeep
+/storage/*
+!/storage/.gitkeep
+/reports/*.pdf
+!/reports/.gitkeep
+backend/data/faiss_index/
+
+# ML Checkpoints
+backend/ml/checkpoints/*
+!backend/ml/checkpoints/.gitkeep
+ml/checkpoints/*
+!ml/checkpoints/.gitkeep
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

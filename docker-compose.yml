@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 1. PostGIS Database Service (Spatial Storage & Vector Polygons)
+  # ============================================================================
+  postgis:
+    image: postgis/postgis:15-3.3
+    container_name: sih1518_postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+      POSTGRES_DB: ${POSTGRES_DB:-sih1518_gis}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sih1518_gis}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sih1518_network
+
+  # ============================================================================
+  # 2. Redis Service (Cache & Message Broker)
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: sih1518_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sih1518_network
+
+  # ============================================================================
+  # 3. FastAPI Backend Service (PyTorch ML + GIS + 20 Tools + PDF Reports)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sih1518_backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: "ISRO SIH1518 Change Intelligence Platform"
+      APP_VERSION: "1.0.0"
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
+      DEBUG: "${DEBUG:-false}"
+      SECRET_KEY: "${SECRET_KEY}"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrespassword}@postgis:5432/${POSTGRES_DB:-sih1518_gis}"
+      REDIS_URL: "redis://redis:6379/0"
+      STORAGE_BACKEND: "local"
+      LOCAL_STORAGE_PATH: "/app/data/storage"
+      SCENES_STORAGE_PATH: "/app/data/scenes"
+      MODEL_DEVICE: "${MODEL_DEVICE:-cpu}"
+      EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-ViT-B-32}"
+      EMBEDDING_PRETRAINED: "${EMBEDDING_PRETRAINED:-laion2b_s34b_b79k}"
+      EMBEDDING_WEIGHTS_PATH: "/app/ml/checkpoints/clip"
+      FAISS_INDEX_PATH: "/app/data/faiss_index"
+      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:80", "http://localhost", "http://frontend:80"]'
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - storage_data:/app/data/storage
+      - model_checkpoints:/app/ml/checkpoints
+      - reports_data:/app/data/storage/reports
+      - faiss_data:/app/data/faiss_index
+      - scenes_data:/app/data/scenes
+    depends_on:
+      postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - sih1518_network
+
+  # ============================================================================
+  # 4. React + Nginx Frontend Service (Interactive GIS Map & Agent Chat UI)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sih1518_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - sih1518_network
+
+# ==============================================================================
+# Persistent Named Storage Volumes
+# ==============================================================================
+volumes:
+  postgis_data:
+    name: sih1518_postgis_data
+  redis_data:
+    name: sih1518_redis_data
+  storage_data:
+    name: sih1518_storage_data
+  model_checkpoints:
+    name: sih1518_model_checkpoints
+  reports_data:
+    name: sih1518_reports_data
+  faiss_data:
+    name: sih1518_faiss_data
+  scenes_data:
+    name: sih1518_scenes_data
+
+# ==============================================================================
+# Isolated Bridge Network
+# ==============================================================================
+networks:
+  sih1518_network:
+    name: sih1518_net
+    driver: bridge
