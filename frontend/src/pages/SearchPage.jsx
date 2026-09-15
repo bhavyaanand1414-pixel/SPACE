@@ -34,6 +34,7 @@ export const SearchPage = () => {
   const [searchType, setSearchType] = useState('text');
   const [error, setError] = useState(null);
   const [totalResults, setTotalResults] = useState(0);
+  const [similarSourceTile, setSimilarSourceTile] = useState(null);
 
   // Filters
   const [satellite, setSatellite] = useState('');
@@ -44,6 +45,7 @@ export const SearchPage = () => {
     if (!query.trim()) return;
     setLoading(true);
     setError(null);
+    setSimilarSourceTile(null);
 
     try {
       const body = {
@@ -80,6 +82,7 @@ export const SearchPage = () => {
     if (!file) return;
     setLoading(true);
     setError(null);
+    setSimilarSourceTile(null);
 
     try {
       const formData = new FormData();
@@ -107,6 +110,33 @@ export const SearchPage = () => {
     }
   }, [satellite]);
 
+  const handleFindSimilar = useCallback(async (tileId, thumbnailUrl) => {
+    setLoading(true);
+    setError(null);
+    setSimilarSourceTile({ tileId, thumbnailUrl });
+
+    try {
+      const res = await fetch(`${API_BASE}/search/similar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tile_id: tileId, k: 50 }),
+      });
+
+      if (!res.ok) throw new Error(`Similar search failed: ${res.status}`);
+      const data = await res.json();
+      setResults(data.results || []);
+      setTotalResults(data.total_results || 0);
+      setLatency(data.latency_ms);
+      setSearchType('similar');
+      setQuery(`[Similar to: ${tileId}]`);
+    } catch (err) {
+      setError(err.message);
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleTextSearch();
   };
@@ -119,7 +149,7 @@ export const SearchPage = () => {
           Semantic Search
         </h1>
         <p className="mt-2 text-slate-400 text-sm">
-          Search the satellite imagery archive by meaning — enter a natural-language query or upload an image to find visually similar tiles.
+          Search the satellite imagery archive by meaning — enter a natural-language query, upload an image, or click "Find Similar" on any tile.
         </p>
       </div>
 
@@ -192,12 +222,33 @@ export const SearchPage = () => {
         </div>
       </div>
 
+      {/* Similar Source Tile Banner */}
+      {similarSourceTile && (
+        <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex items-center gap-4">
+          <img
+            src={similarSourceTile.thumbnailUrl?.startsWith('http') ? similarSourceTile.thumbnailUrl : `http://localhost:8000${similarSourceTile.thumbnailUrl}`}
+            alt="Source tile"
+            className="w-16 h-16 rounded-lg object-cover border border-purple-500/40"
+          />
+          <div>
+            <div className="text-purple-300 text-sm font-semibold">🔍 Image-to-Image Search (PS 26227 §2.2.1)</div>
+            <div className="text-slate-400 text-xs mt-0.5">Showing tiles visually similar to <span className="text-purple-400 font-mono">{similarSourceTile.tileId}</span></div>
+          </div>
+          <button
+            onClick={() => { setSimilarSourceTile(null); setResults([]); setQuery(''); }}
+            className="ml-auto px-3 py-1.5 text-xs bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:border-purple-500/50 transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Results Meta */}
       {(results.length > 0 || latency !== null) && (
         <div className="flex items-center gap-4 mb-4 text-sm text-slate-400">
           <span>{totalResults} results</span>
           {latency !== null && <span>· {latency.toFixed(1)} ms</span>}
-          <Badge>{searchType === 'text' ? 'Text Search' : 'Image Search'}</Badge>
+          <Badge>{searchType === 'text' ? 'Text Search' : searchType === 'similar' ? '🔍 Image-to-Image' : 'Image Search'}</Badge>
         </div>
       )}
 
@@ -211,7 +262,7 @@ export const SearchPage = () => {
       {/* Results Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {results.map((r, i) => (
-          <div key={r.tile_id || i} id={`result-${i}`} className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden hover:border-cyan-500/40 transition-all group cursor-pointer">
+          <div key={r.tile_id || i} id={`result-${i}`} className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden hover:border-cyan-500/40 transition-all group">
             {/* Tile thumbnail */}
             <div className="aspect-square bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center relative overflow-hidden">
               {r.thumbnail_url ? (
@@ -228,6 +279,15 @@ export const SearchPage = () => {
                   #{i + 1}
                 </span>
               </div>
+              {/* Find Similar Button (overlay on hover) */}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleFindSimilar(r.tile_id, r.thumbnail_url); }}
+                className="absolute bottom-2 right-2 px-2.5 py-1.5 bg-purple-600/90 hover:bg-purple-500 text-white text-[10px] font-semibold rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-lg shadow-purple-900/50 flex items-center gap-1"
+                title="Find visually similar tiles (Image-to-Image Search)"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                Find Similar
+              </button>
             </div>
             {/* Metadata */}
             <div className="p-3 space-y-2">
@@ -249,7 +309,7 @@ export const SearchPage = () => {
         <div className="text-center py-20 text-slate-500">
           <svg className="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           <p className="text-lg mb-1">Search the satellite archive</p>
-          <p className="text-sm">Enter a natural-language query or upload an image to discover matching tiles</p>
+          <p className="text-sm">Enter a natural-language query, upload an image, or click "Find Similar" on any result tile</p>
         </div>
       )}
     </div>

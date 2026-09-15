@@ -114,6 +114,46 @@ class SemanticSearchService:
 
         return results[:k]
 
+    @staticmethod
+    def tile_similarity_search(
+        tile_id: str,
+        filters: Optional[SearchFilters] = None,
+        k: int = 50,
+    ) -> List[SearchResult]:
+        """
+        Find tiles visually similar to an existing indexed tile.
+
+        Reconstructs the embedding for *tile_id* directly from the FAISS
+        index (no image file needed) and returns ranked neighbours.
+        """
+        index = get_vector_index()
+
+        # Find the FAISS integer index for this tile_id
+        target_idx = None
+        for i, tid in enumerate(index._id_map):
+            if tid == tile_id:
+                target_idx = i
+                break
+
+        if target_idx is None:
+            logger.warning(f"tile_similarity_search: tile_id '{tile_id}' not found in index")
+            return []
+
+        query_embedding = index.get_embedding_by_index(target_idx)
+        if query_embedding is None:
+            return []
+
+        # Over-fetch, then filter out the query tile itself
+        raw_results = index.search(query_embedding, k=k * 3 + 1)
+        raw_results = [(tid, score) for tid, score in raw_results if tid != tile_id]
+
+        results = SemanticSearchService._to_search_results(raw_results)
+
+        if filters:
+            results = SemanticSearchService._apply_filters(results, filters)
+
+        return results[:k]
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

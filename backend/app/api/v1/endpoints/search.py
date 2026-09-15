@@ -18,6 +18,7 @@ from app.schemas.search import (
     ChangeAnalysisRequest,
     ChangeAnalysisResponse,
     ChangeEventSchema,
+    DiscoverSimilarRequest,
     SearchFiltersSchema,
     SearchResultItem,
     SearchResultsResponse,
@@ -163,5 +164,55 @@ async def image_search(
             for r in results
         ],
         search_type="image",
+        latency_ms=round(latency, 2),
+    )
+
+
+@router.post(
+    "/similar",
+    response_model=SearchResultsResponse,
+    summary="Find Similar Tiles (Image-to-Image by Tile ID)",
+    description=(
+        "Given an existing tile_id already in the index, find visually and "
+        "semantically similar tiles without uploading an image. "
+        "Satisfies PS 26227 §2.2.1 image-to-image retrieval and §2.2.4 discovery."
+    ),
+)
+async def find_similar_tiles(request: DiscoverSimilarRequest):
+    """Find tiles similar to an existing indexed tile by its tile_id."""
+    start = time.time()
+
+    try:
+        results = SemanticSearchService.tile_similarity_search(
+            tile_id=request.tile_id,
+            k=request.k,
+        )
+    except Exception as exc:
+        logger.error(f"Similar tile search error: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Similarity search failed: {str(exc)}",
+        )
+
+    latency = (time.time() - start) * 1000
+
+    return SearchResultsResponse(
+        query=f"[similar to: {request.tile_id}]",
+        total_results=len(results),
+        results=[
+            SearchResultItem(
+                tile_id=r.tile_id,
+                scene_id=r.scene_id,
+                similarity_score=r.similarity_score,
+                bbox=list(r.bbox),
+                acquisition_date=r.acquisition_date,
+                satellite=r.satellite,
+                sensor=r.sensor,
+                thumbnail_url=r.thumbnail_url,
+                quality_score=r.quality_score,
+            )
+            for r in results
+        ],
+        search_type="similar",
         latency_ms=round(latency, 2),
     )
