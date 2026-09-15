@@ -56,6 +56,18 @@ class SemanticSearchService:
     """
 
     @staticmethod
+    def _diversify_results(results: List[SearchResult], max_per_scene: int = 3) -> List[SearchResult]:
+        """Ensure a single scene doesn't dominate the top results."""
+        diversified = []
+        scene_counts = {}
+        for r in results:
+            count = scene_counts.get(r.scene_id, 0)
+            if count < max_per_scene:
+                diversified.append(r)
+                scene_counts[r.scene_id] = count + 1
+        return diversified
+
+    @staticmethod
     def text_search(
         query: str,
         filters: Optional[SearchFilters] = None,
@@ -63,25 +75,20 @@ class SemanticSearchService:
     ) -> List[SearchResult]:
         """
         Search the archive using a natural-language text query.
-
-        Examples:
-        - "newly built structures near a river"
-        - "large vehicle concentrations on open ground"
-        - "deforested area with exposed soil"
-
-        Returns ranked results by cosine similarity (descending).
         """
         encoder = get_encoder()
         query_embedding = encoder.encode_text(query)
 
         index = get_vector_index()
-        # Over-fetch to account for post-filtering
-        raw_results = index.search(query_embedding, k=k * 3)
+        # Over-fetch massively to account for post-filtering and diversification
+        raw_results = index.search(query_embedding, k=k * 5)
 
         results = SemanticSearchService._to_search_results(raw_results)
 
         if filters:
             results = SemanticSearchService._apply_filters(results, filters)
+            
+        results = SemanticSearchService._diversify_results(results, max_per_scene=2)
 
         return results[:k]
 
@@ -93,24 +100,19 @@ class SemanticSearchService:
     ) -> List[SearchResult]:
         """
         Search the archive using an image tile as the query.
-
-        Parameters
-        ----------
-        image : np.ndarray (H, W, 3) uint8
-            RGB image tile to use as the visual query.
-
-        Returns ranked results by cosine similarity (descending).
         """
         encoder = get_encoder()
         query_embedding = encoder.encode_image(image)
 
         index = get_vector_index()
-        raw_results = index.search(query_embedding, k=k * 3)
+        raw_results = index.search(query_embedding, k=k * 5)
 
         results = SemanticSearchService._to_search_results(raw_results)
 
         if filters:
             results = SemanticSearchService._apply_filters(results, filters)
+            
+        results = SemanticSearchService._diversify_results(results, max_per_scene=2)
 
         return results[:k]
 
