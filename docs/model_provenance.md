@@ -1,54 +1,24 @@
-# Model & Dataset Provenance (PS 26227 §2.2.7)
+# Model & Dataset Provenance Declaration (PS 26227 §2.2.7)
 
-> All pretrained models and datasets used in this system are publicly available
-> under their respective licences.  Model weights are packaged locally for
-> offline evaluation as required by PS 26227 §2.2.7.
+This document declares all pretrained models, their origins, licences, and datasets used in the SIH1518 platform, as required by the problem statement constraint that *"pretrained public models may be used provided that their origin and licence are declared and the required weights are packaged for offline use."*
 
 ## Pretrained Models
 
-| Model | Version | Origin | Licence | Purpose | Weights Location | Size |
-|---|---|---|---|---|---|---|
-| **OpenCLIP ViT-B/32** | laion2b_s34b_b79k | [mlfoundations/open_clip](https://github.com/mlfoundations/open_clip) | MIT (code), Apache-2.0 (LAION-2B weights) | Satellite tile & text embedding for semantic search (PS 26227 §2.2.1) | `ml/checkpoints/clip/` | ~350 MB |
-| **Siamese U-Net** | 1.0.0 | Custom trained (SIH1518 project) | Project-specific | Binary change detection on satellite image pairs (PS 26227 §2.2.2) | `ml/checkpoints/siamese_unet.pt` | ~100 MB |
-
-## Libraries with Embedded Models
-
-| Library | Version | Licence | Purpose |
-|---|---|---|---|
-| `open-clip-torch` | ≥2.24.0 | MIT | CLIP model loading and inference |
-| `faiss-cpu` | ≥1.7.4 | MIT | Approximate nearest neighbor vector search |
-| `hdbscan` | ≥0.8.33 | BSD-3-Clause | Density-based embedding clustering |
-| `sentence-transformers` | ≥2.7.0 | Apache-2.0 | Text encoding utilities |
-| `torch` | ≥2.2.1 | BSD-3-Clause | Deep learning framework |
-| `rasterio` | ≥1.3.9 | BSD-3-Clause | Geospatial raster I/O |
+| Model | Origin | License | Purpose | Offline Packaged |
+|-------|--------|---------|---------|-----------------|
+| OpenCLIP ViT-B/32 (laion2B-s34B-b79K) | [LAION / OpenCLIP](https://github.com/mlfoundations/open_clip) | MIT License | Semantic image/text embedding for retrieval (§2.2.1) | ✅ Yes — `ml/checkpoints/clip/` |
+| FAISS (Facebook AI Similarity Search) | [Meta Research](https://github.com/facebookresearch/faiss) | MIT License | Approximate nearest-neighbor vector search (§2.2.6) | ✅ Yes — installed via pip |
+| scikit-learn (PCA, KMeans) | [scikit-learn](https://github.com/scikit-learn/scikit-learn) | BSD 3-Clause | Dimensionality reduction & clustering (§2.2.4) | ✅ Yes — installed via pip |
+| HDBSCAN | [hdbscan](https://github.com/scikit-learn-contrib/hdbscan) | BSD 3-Clause | Density-based clustering (§2.2.4) | ✅ Yes — installed via pip |
 
 ## Datasets
 
-| Dataset | Source | Licence | Usage |
-|---|---|---|---|
-| **Copernicus Sentinel-2 L2A** | ESA Copernicus Open Access Hub | Copernicus Sentinel Data Terms (free, open) | Primary optical multispectral imagery |
-| **Copernicus Sentinel-1 SAR** | ESA Copernicus Open Access Hub | Copernicus Sentinel Data Terms (free, open) | SAR backscatter for flood/inundation mapping |
-| **USGS Landsat Collection 2** | USGS EarthExplorer | Public Domain (USGS) | Multi-temporal optical imagery |
-| **NRSC/ISRO Bhuvan** | ISRO Bhuvan Portal | ISRO Open Data Policy | Indian Earth-observation data products |
+| Dataset | Source | License | Usage |
+|---------|--------|---------|-------|
+| Copernicus Sentinel-2 | [ESA Copernicus Open Access Hub](https://scihub.copernicus.eu/) | Copernicus Open Licence | Primary optical satellite imagery |
+| USGS Landsat Collection 2 | [USGS EarthExplorer](https://earthexplorer.usgs.gov/) | Public Domain (US Government) | Secondary multi-spectral imagery |
+| LAION-2B | [LAION](https://laion.ai/) | CC-BY-4.0 | Used for pretraining the OpenCLIP model (not redistributed) |
 
-## Offline Staging Procedure
+## Offline Operation Compliance
 
-```bash
-# 1. Install dependencies
-cd backend && pip install -r requirements.txt
-
-# 2. Download and cache model weights (requires network)
-python scripts/download_models.py
-
-# 3. Verify weights are cached
-ls ml/checkpoints/clip/
-ls ml/checkpoints/siamese_unet.pt
-
-# 4. Network can now be disconnected for evaluation
-```
-
-## Provenance Manifest
-
-A machine-readable manifest is auto-generated at `ml/checkpoints/MANIFEST.json`
-by the `download_models.py` script.  This file records model origins, licences,
-download timestamps, and embedding dimensions.
+All model weights are pre-downloaded and stored in `ml/checkpoints/` for complete offline operation. The system does **not** make any network calls during inference or evaluation. All dependencies are installed locally via `pip` and `npm`.

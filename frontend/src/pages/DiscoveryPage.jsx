@@ -174,9 +174,17 @@ export const DiscoveryPage = () => {
           {/* Similar Results */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {similarResults.map((r, i) => (
-              <div key={r.tile_id || i} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 hover:border-emerald-500/30 transition-all">
-                <div className="aspect-video bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg mb-2 flex items-center justify-center">
-                  <span className="text-slate-500 text-xs font-mono">{r.tile_id?.substring(0, 12)}</span>
+              <div key={r.tile_id || i} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 hover:border-emerald-500/30 transition-all group">
+                <div className="aspect-square bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg mb-2 flex items-center justify-center overflow-hidden">
+                  {r.thumbnail_url ? (
+                    <img
+                      src={r.thumbnail_url.startsWith('http') ? r.thumbnail_url : `http://localhost:8000${r.thumbnail_url}`}
+                      alt={`Tile ${r.tile_id}`}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    />
+                  ) : (
+                    <span className="text-slate-500 text-xs font-mono">{r.tile_id?.substring(0, 12)}</span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-400 font-mono">Score: {(r.similarity_score * 100).toFixed(1)}%</span>

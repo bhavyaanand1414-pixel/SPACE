@@ -98,6 +98,7 @@ async def find_similar(request: DiscoverSimilarRequest):
                     tile_id=tid,
                     scene_id=tid.split(":")[0] if ":" in tid else tid,
                     similarity_score=round(score, 4),
+                    thumbnail_url=f"/api/v1/tiles/{tid.split(':')[0]}_{tid.split(':')[1]}.jpg" if ":" in tid else None,
                 )
                 for tid, score in results
             ],
