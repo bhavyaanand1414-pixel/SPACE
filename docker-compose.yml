@@ -66,10 +66,10 @@ services:
       SCENES_STORAGE_PATH: "/app/data/scenes"
       MODEL_DEVICE: "${MODEL_DEVICE:-cpu}"
       EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-ViT-B-32}"
-      EMBEDDING_PRETRAINED: "${EMBEDDING_PRETRAINED:-laion2b_s34b_b79k}"
+      EMBEDDING_PRETRAINED: "${EMBEDDING_PRETRAINED:-remoteclip}"
       EMBEDDING_WEIGHTS_PATH: "/app/ml/checkpoints/clip"
       FAISS_INDEX_PATH: "/app/data/faiss_index"
-      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:80", "http://localhost", "http://frontend:80"]'
+      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:5175", "http://localhost:80", "http://localhost", "http://frontend:80"]'
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:

@@ -1,10 +1,16 @@
 """
-CLIP Embedding Encoder — local multimodal encoder for satellite imagery.
+CLIP / RemoteCLIP Embedding Encoder — local multimodal encoder for satellite imagery.
 
 Uses OpenCLIP (open-source CLIP implementation) to encode imagery tiles and
 natural-language queries into a shared 512-d embedding space.  The model runs
 entirely on-device (CPU or CUDA) with no external API calls, satisfying the
 PS 26227 §2.2.7 offline operation constraint.
+
+Supports two loading modes:
+  1. Standard OpenCLIP pretrained tags (e.g. "laion2b_s34b_b79k")
+  2. RemoteCLIP: downloads the .pt checkpoint from HuggingFace
+     (chendelong/RemoteCLIP) and loads state_dict into the matching
+     OpenCLIP architecture.
 
 Supported workflows:
 - encode_image(tile) → 512-d vector  (for indexing and image-to-image search)
@@ -43,10 +49,18 @@ class CLIPEmbeddingEncoder:
 
     Parameters are read from ``app.core.config.settings``:
     - EMBEDDING_MODEL_NAME   (default: ViT-B-32)
-    - EMBEDDING_PRETRAINED   (default: laion2b_s34b_b79k)
+    - EMBEDDING_PRETRAINED   (default: remoteclip  — or any OpenCLIP tag)
     - EMBEDDING_WEIGHTS_PATH (local cache directory for offline use)
     - MODEL_DEVICE           (auto / cuda / cpu)
     """
+
+    # RemoteCLIP HuggingFace checkpoint mapping
+    _REMOTECLIP_HF_REPO = "chendelong/RemoteCLIP"
+    _REMOTECLIP_FILES = {
+        "ViT-B-32": "RemoteCLIP-ViT-B-32.pt",
+        "ViT-L-14": "RemoteCLIP-ViT-L-14.pt",
+        "RN50": "RemoteCLIP-RN50.pt",
+    }
 
     def __init__(self) -> None:
         import open_clip
@@ -56,23 +70,77 @@ class CLIPEmbeddingEncoder:
         cache_dir = Path(settings.EMBEDDING_WEIGHTS_PATH)
         cache_dir.mkdir(parents=True, exist_ok=True)
 
+        pretrained = settings.EMBEDDING_PRETRAINED
+        model_name = settings.EMBEDDING_MODEL_NAME
+
         logger.info(
-            f"Loading CLIP model {settings.EMBEDDING_MODEL_NAME} "
-            f"(pretrained={settings.EMBEDDING_PRETRAINED}) on {self.device}"
+            f"Loading CLIP model {model_name} "
+            f"(pretrained={pretrained}) on {self.device}"
         )
 
-        self.model, _, self.preprocess = open_clip.create_model_and_transforms(
-            model_name=settings.EMBEDDING_MODEL_NAME,
-            pretrained=settings.EMBEDDING_PRETRAINED,
-            cache_dir=str(cache_dir),
-        )
-        self.tokenizer = open_clip.get_tokenizer(settings.EMBEDDING_MODEL_NAME)
+        if self._is_remoteclip(pretrained):
+            # --- RemoteCLIP: download .pt checkpoint and load state_dict ---
+            self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+                model_name=model_name,
+            )
+            self._load_remoteclip_weights(model_name, cache_dir)
+            logger.info("Loaded RemoteCLIP weights into OpenCLIP architecture")
+        else:
+            # --- Standard OpenCLIP pretrained tag ---
+            self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+                model_name=model_name,
+                pretrained=pretrained,
+                cache_dir=str(cache_dir),
+            )
+
+        self.tokenizer = open_clip.get_tokenizer(model_name)
         self.model = self.model.to(self.device).eval()
 
         self.embedding_dim: int = settings.EMBEDDING_DIMENSION
         logger.info(
             f"CLIP encoder ready — dim={self.embedding_dim}, device={self.device}"
         )
+
+    # ------------------------------------------------------------------
+    # RemoteCLIP helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_remoteclip(pretrained: str) -> bool:
+        """Check if the pretrained value refers to RemoteCLIP."""
+        tag = pretrained.lower().strip()
+        return tag in ("remoteclip", "remote_clip", "remote-clip") or "remoteclip" in tag
+
+    def _load_remoteclip_weights(self, model_name: str, cache_dir: Path) -> None:
+        """Download RemoteCLIP .pt from HuggingFace and load state_dict."""
+        from huggingface_hub import hf_hub_download
+
+        filename = self._REMOTECLIP_FILES.get(model_name)
+        if filename is None:
+            raise ValueError(
+                f"No RemoteCLIP checkpoint for architecture '{model_name}'. "
+                f"Available: {list(self._REMOTECLIP_FILES.keys())}"
+            )
+
+        local_path = cache_dir / filename
+        if not local_path.exists():
+            logger.info(
+                f"Downloading RemoteCLIP checkpoint '{filename}' "
+                f"from {self._REMOTECLIP_HF_REPO}..."
+            )
+            hf_hub_download(
+                repo_id=self._REMOTECLIP_HF_REPO,
+                filename=filename,
+                local_dir=str(cache_dir),
+            )
+        else:
+            logger.info(f"Using cached RemoteCLIP checkpoint: {local_path}")
+
+        ckpt = torch.load(str(local_path), map_location="cpu")
+        # The checkpoint may be a raw state_dict or wrapped in a dict
+        if isinstance(ckpt, dict) and "state_dict" in ckpt:
+            ckpt = ckpt["state_dict"]
+        self.model.load_state_dict(ckpt, strict=True)
 
     # ------------------------------------------------------------------
     # Public API

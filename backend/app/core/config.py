@@ -64,7 +64,7 @@ class Settings(BaseSettings):
 
     # Semantic Embedding Engine (PS 26227 §2.2.1 — fully offline)
     EMBEDDING_MODEL_NAME: str = "ViT-B-32"
-    EMBEDDING_PRETRAINED: str = "laion2b_s34b_b79k"
+    EMBEDDING_PRETRAINED: str = "hf-hub:chendinc/RemoteCLIP_ViT_B-32"
     EMBEDDING_WEIGHTS_PATH: str = "./ml/checkpoints/clip"
     EMBEDDING_DIMENSION: int = 512
 

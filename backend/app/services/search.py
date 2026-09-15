@@ -83,7 +83,7 @@ class SemanticSearchService:
         # Over-fetch massively to account for post-filtering and diversification
         raw_results = index.search(query_embedding, k=k * 5)
 
-        results = SemanticSearchService._to_search_results(raw_results)
+        results = SemanticSearchService._to_search_results(raw_results, is_image_query=False)
 
         if filters:
             results = SemanticSearchService._apply_filters(results, filters)
@@ -107,7 +107,7 @@ class SemanticSearchService:
         index = get_vector_index()
         raw_results = index.search(query_embedding, k=k * 5)
 
-        results = SemanticSearchService._to_search_results(raw_results)
+        results = SemanticSearchService._to_search_results(raw_results, is_image_query=True)
 
         if filters:
             results = SemanticSearchService._apply_filters(results, filters)
@@ -149,7 +149,7 @@ class SemanticSearchService:
         raw_results = index.search(query_embedding, k=k * 3 + 1)
         raw_results = [(tid, score) for tid, score in raw_results if tid != tile_id]
 
-        results = SemanticSearchService._to_search_results(raw_results)
+        results = SemanticSearchService._to_search_results(raw_results, is_image_query=True)
 
         if filters:
             results = SemanticSearchService._apply_filters(results, filters)
@@ -163,6 +163,7 @@ class SemanticSearchService:
     @staticmethod
     def _to_search_results(
         raw_results: List[Tuple[str, float]],
+        is_image_query: bool = False
     ) -> List[SearchResult]:
         """Convert FAISS (tile_id, score) tuples to SearchResult objects."""
         results: List[SearchResult] = []
@@ -171,10 +172,20 @@ class SemanticSearchService:
             parts = tile_id.split(":", 1)
             scene_id = parts[0] if len(parts) > 1 else tile_id
             tile_index = parts[1] if len(parts) > 1 else "0"
+            
+            raw = float(score)
+            if is_image_query:
+                # Image-to-image embeddings have higher baseline cosine similarity.
+                # Usually ~0.50 is unrelated, ~0.80+ is highly similar.
+                normalized = max(0.0, min(1.0, (raw - 0.55) / 0.35))
+            else:
+                # Text-to-image typical bounds
+                normalized = max(0.0, min(1.0, (raw - 0.18) / 0.14))
+            
             results.append(SearchResult(
                 tile_id=tile_id,
                 scene_id=scene_id,
-                similarity_score=round(min(float(score) * 3, 1.0), 4),
+                similarity_score=round(normalized, 4),
                 thumbnail_url=f"/api/v1/tiles/{scene_id}_{tile_index}.jpg"
             ))
         return results

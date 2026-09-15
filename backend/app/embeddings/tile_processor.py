@@ -101,16 +101,54 @@ class TileProcessor:
                 scl_ds = rasterio.open(scl_path)
 
             idx = 0
-            for row_off in range(0, height - self.tile_size + 1, self.stride):
-                for col_off in range(0, width - self.tile_size + 1, self.stride):
-                    window = Window(col_off, row_off, self.tile_size, self.tile_size)
-
-                    # Read RGB bands using windowed I/O (memory efficient)
-                    rgb = src.read(rgb_bands, window=window)  # (3, H, W)
-
-                    # Compute nodata/zero fraction
-                    valid_mask = np.all(rgb > 0, axis=0) if nodata is None else np.all(rgb != nodata, axis=0)
-                    valid_fraction = valid_mask.sum() / valid_mask.size
+            
+            # Handle images smaller than tile_size (e.g. EuroSAT 64x64)
+            if height < self.tile_size or width < self.tile_size:
+                window = Window(0, 0, width, height)
+                rgb = src.read(rgb_bands, window=window)
+                
+                valid_mask = np.all(rgb > 0, axis=0) if nodata is None else np.all(rgb != nodata, axis=0)
+                valid_fraction = valid_mask.sum() / valid_mask.size
+                
+                if valid_fraction >= 0.1:
+                    rgb_hwc = np.moveaxis(rgb, 0, -1)
+                    rgb_uint8 = self._normalise_to_uint8(rgb_hwc)
+                    
+                    try:
+                        tile_transform = rasterio.windows.transform(window, transform)
+                        minx = tile_transform.c
+                        maxy = tile_transform.f
+                        maxx = minx + width * tile_transform.a
+                        miny = maxy + height * tile_transform.e
+                        bbox = (minx, miny, maxx, maxy)
+                        geo_polygon = mapping(box(*bbox))
+                    except Exception:
+                        bbox = (0, 0, width, height)
+                        geo_polygon = mapping(box(0, 0, width, height))
+                        
+                    tiles.append(TileInfo(
+                        tile_index=idx,
+                        image_rgb=rgb_uint8,
+                        window=window,
+                        geo_bounds=geo_polygon,
+                        bbox=bbox,
+                        scene_id=scene_id,
+                        row=0,
+                        col=0,
+                        cloud_fraction=0.0,
+                        quality_score=round(valid_fraction, 4),
+                    ))
+            else:
+                for row_off in range(0, height - self.tile_size + 1, self.stride):
+                    for col_off in range(0, width - self.tile_size + 1, self.stride):
+                        window = Window(col_off, row_off, self.tile_size, self.tile_size)
+    
+                        # Read RGB bands using windowed I/O (memory efficient)
+                        rgb = src.read(rgb_bands, window=window)  # (3, H, W)
+    
+                        # Compute nodata/zero fraction
+                        valid_mask = np.all(rgb > 0, axis=0) if nodata is None else np.all(rgb != nodata, axis=0)
+                        valid_fraction = valid_mask.sum() / valid_mask.size
 
                     if valid_fraction < 0.5:
                         continue  # Skip mostly-empty tiles
@@ -201,7 +239,11 @@ class TileProcessor:
         """
         Percentile-stretch multi-spectral reflectance values to 0–255 uint8.
         Uses 2–98% stretch to suppress outlier bright/dark pixels.
+        If the image is already uint8 (e.g. standard JPEG/PNG), return as-is.
         """
+        if rgb.dtype == np.uint8:
+            return rgb
+            
         out = np.zeros_like(rgb, dtype=np.uint8)
         for c in range(rgb.shape[2]):
             band = rgb[:, :, c].astype(np.float64)
